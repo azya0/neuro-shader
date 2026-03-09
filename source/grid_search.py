@@ -49,10 +49,8 @@ class GridSearch[T: IGotModel]:
         self.params = params
     
     def __compare(self, data: SearchResult):
-        if self.best.valid_loss <= data.valid_loss:
-            return
-        
-        self.best = data
+        if self.best is None or self.best.valid_loss > data.valid_loss:
+            self.best = data
 
     # Механизм автоматической остановки. 
     # Может быть только GridSeatchParams[T].epochs без улучшений

@@ -3,7 +3,6 @@ from functools import lru_cache
 from math import sqrt, ceil
 from random import random
 from typing import Any, Callable
-import threading
 
 from pydantic import BaseModel
 from torch import Tensor, tensor, cat, float32
@@ -143,43 +142,21 @@ def function(start: Vector3, end: Vector3, data: Data):
 class FunctionDataset(Dataset):
     def __init__(self, size: int, params: Data, threads_count: int = 1):
         self.size = size
-
         self.params: Data = params
-        self.data: list[tuple[Vector3, Vector3, float]] = []
 
-        threads: list[threading.Thread] = []
+    def create(self) -> tuple[Vector3, Vector3, float]:
+        start, end = Vector3.random(), Vector3.random()
+        
+        value = function(start, end, self.params)
 
-        total: int = 0
-        _size: int = int(float(size) / threads_count)
-
-        def new_thread(size: int):
-            thread = threading.Thread(target=self.create, args=(size, ))
-            thread.start()
-            threads.append(thread)
-
-        for _ in range(threads_count - 1):
-            total += _size
-            new_thread(_size)
-
-        new_thread(size - total)
-
-        for thread in threads:
-            thread.join()
-
-    def create(self, size: int = 0):
-        for _ in tqdm(range(size), desc=f"Создаём данные размера {size}"):
-            start, end = Vector3.random(), Vector3.random()
-            
-            value = function(start, end, self.params)
-
-            self.data.append((start, end, value))
+        return start, end, value
 
     def __len__(self) -> int:
         return self.size
     
     @lru_cache
     def __getitem__(self, index: int) -> tuple[Tensor, Tensor]:
-        start, end, value = self.data[index]
+        start, end, value = self.create()
 
         input = cat([start.to_tensor(), end.to_tensor()], dim=0)
 
@@ -190,7 +167,8 @@ def dataloader_base(batch_size: int, num_workers: int) -> dict[str, Any]:
     return {
         "batch_size":   batch_size,
         "num_workers":  num_workers,
-        # "persistent_workers": True,
+        "persistent_workers": True,
+        "drop_last":          True,
     }
 
 

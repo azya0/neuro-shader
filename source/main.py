@@ -80,6 +80,8 @@ def iteration(data: TrainData, is_train: bool) -> float:
 
         running_loss += loss.item()
 
+        del input, output, result, loss
+
         bar.set_description(f"{"train" if is_train else "valid"} loss: {running_loss}")
     
     return running_loss
@@ -107,11 +109,11 @@ def load_dataset(structures: tuple[tuple[int]]) -> tuple[DataLoader, DataLoader]
     get_params = lambda size: TrainDataParams(
         size=size,
         percent=0.2,
-        batch_size=16,
-        workers=12
+        batch_size=32,
+        workers=4
     )
 
-    params = get_params(max_params * 7)
+    params = get_params(max_params * 2)
 
     return get_dataset(
         params.data,
