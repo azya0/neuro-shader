@@ -7,7 +7,6 @@ from typing import Any, Callable
 from pydantic import BaseModel
 from torch import Tensor, tensor, cat, float32
 from torch.utils.data import DataLoader, Dataset
-from tqdm import tqdm
 
 from godot.ImageTexture3D import GodotTexture3DSampler
 
@@ -46,6 +45,9 @@ class Vector3(BaseModel):
 
     def __init__(self, x: float, y: float, z: float):    
         super().__init__(x=x, y=y, z=z)
+    
+    def __str__(self) -> str:
+        return f"({self.x}, {self.y}, {self.z})"
 
     def __sub__(self, other: Vector3) -> Vector3:
         return Vector3(
@@ -140,7 +142,7 @@ def function(start: Vector3, end: Vector3, data: Data):
 
 
 class FunctionDataset(Dataset):
-    def __init__(self, size: int, params: Data, threads_count: int = 1):
+    def __init__(self, size: int, params: Data):
         self.size = size
         self.params: Data = params
 
