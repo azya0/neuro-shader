@@ -87,19 +87,6 @@ def iteration(data: TrainData, is_train: bool) -> float:
     return running_loss
 
 
-# def train(data: TrainData, epochs: int = 20) -> list[tuple[float, float]]:
-#     results: list[tuple[float, float]] = []
-
-#     for epoch in range(epochs):
-#         results.append((
-#             iteration(data, True, epoch + 1)
-#         ))
-    
-#     results.append(iteration(data, False, epochs + 1))
-    
-#     return results
-
-
 def load_dataset(structures: tuple[tuple[int]]) -> tuple[DataLoader, DataLoader]:
     print("Самая сложная модель: ")
     max_struct = max(structures, key=lambda data: sum(data))
@@ -177,22 +164,6 @@ def main():
     )
 
     GridSearch(params).run()
-
-    # for structure in tqdm([MLP_STRUCTURES[1]], desc="Формируем модели и датасет для них..."):
-    #     model: nn.Module = MLP(structure, use_dropout=False)
-
-    #     params_count = summary(model).trainable_params
-    #     params = get_params(params_count * 10)
-
-    #     train_data = create_train_data(model, params)
-
-    #     subprocess.run("clear")
-
-    #     results = train(train_data)
-
-    #     save("../results.txt", f"{structure}:\n{results}\n")
-
-    #     cuda.empty_cache()
 
 
 if __name__ == "__main__":
