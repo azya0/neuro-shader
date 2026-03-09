@@ -1,2 +1,9 @@
+# dev
+
 .venv
 __pycache__
+
+# result data
+
+best_model_data.txt
+model.pth
