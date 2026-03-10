@@ -73,7 +73,7 @@ class Image(BaseModel):
 
     def get(self, index1: int, index2: int) -> float:
         assert 0 <= index1 < self.height
-        assert 0 <= index2 < self.height
+        assert 0 <= index2 < self.width
 
         return self.data[index1][index2]
 
