@@ -28,7 +28,7 @@ class TrainData(IGotModel):
     dataset:    tuple[DataLoader, DataLoader]
     model:      nn.Module
     device:     device = field(default_factory=get_device)
-    loss:       nn.L1Loss = field(default_factory=nn.L1Loss)
+    loss:       nn.Module = field(default_factory=nn.MSELoss)
 
     def get_model(self) -> nn.Module:
         return self.model
@@ -78,7 +78,7 @@ def iteration(data: TrainData, is_train: bool) -> float:
         loss.backward()
         data.optimizer.step()
 
-        running_loss += loss.item()
+        running_loss += loss.item() / len(dataset)
 
         del input, output, result, loss
 
@@ -97,10 +97,10 @@ def load_dataset(structures: tuple[tuple[int]]) -> tuple[DataLoader, DataLoader]
         size=size,
         percent=0.2,
         batch_size=32,
-        workers=4
+        workers=8
     )
 
-    params = get_params(max_params * 2)
+    params = get_params(5000)
 
     return get_dataset(
         params.data,
@@ -132,7 +132,7 @@ def main():
     after_iteration()
 
     LEARNING_RATES: tuple[float] = (
-        0.001, 0.0001
+        0.01, 0.001, 0.0001,
     )
 
     variants: list[SearchValue] = []
@@ -153,7 +153,7 @@ def main():
         )
     
     params = GridSeatchParams(
-        epochs=3,
+        epochs=15,
         filepath_data="../best_model_data.txt",
         filepath_model="../model.pth",
         variants=variants,

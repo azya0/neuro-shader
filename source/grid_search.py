@@ -56,19 +56,22 @@ class GridSearch[T: IGotModel]:
     # Может быть только GridSeatchParams[T].epochs без улучшений
     # Иначе принудительная остановка
     def __auto_epoches(self, train_data: T) -> tuple[float, float]:
-        best_train_score: float = float("+inf")
-        useless_epoch_number: int = 0
+        best_train_score:   float = float("+inf")
+        best_train_index:   int = -1
 
+        index: int = best_train_index
         while True:
+            index += 1
             score = self.params.train_iteration(train_data)
 
             if score < best_train_score:
                 best_train_score = score
-            elif (useless_epoch_number + 1) > self.params.epochs:
+                best_train_index = index
+                continue
+
+            if (index - best_train_index) > self.params.epochs:
                 break
-            else:
-                useless_epoch_number += 1
-        
+
         validation_score: float = self.params.valid_iteration(train_data)
 
         return best_train_score, validation_score
