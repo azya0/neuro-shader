@@ -5,8 +5,9 @@ from random import random
 from typing import Any, Callable
 
 from pydantic import BaseModel
-from torch import Tensor, tensor, cat, float32
+import torch
 from torch.utils.data import DataLoader, Dataset
+from tqdm import tqdm
 
 from godot.ImageTexture3D import GodotTexture3DSampler
 
@@ -40,11 +41,23 @@ class Vector3(BaseModel):
     z: float
 
     @staticmethod
-    def random() -> Vector3:
-        return Vector3(random(), random(), random())
+    def random_direction() -> Vector3:
+        return Vector3(random(), random(), random()).normalize()
 
-    def __init__(self, x: float, y: float, z: float):    
+    @staticmethod
+    def random_start() -> Vector3:
+        # [0; 1] -> [-1; 1]
+        xy_coords = lambda : random() * 2.0 - 1.0
+
+        return Vector3(xy_coords(), random(), xy_coords()).normalize()
+
+    @staticmethod
+    def dot(first: Vector3, second: Vector3) -> float:
+        return first.x * second.x + first.y * second.y + first.z * second.z
+
+    def __init__(self, x: float, y: float, z: float):
         super().__init__(x=x, y=y, z=z)
+        self._length = sqrt(self.x * self.x + self.y * self.y + self.z * self.z)
     
     def __str__(self) -> str:
         return f"({self.x}, {self.y}, {self.z})"
@@ -76,12 +89,19 @@ class Vector3(BaseModel):
             self.y / value,
             self.z / value
         )
+    
+    def __pow__(self, value: float) -> Vector3:
+        return Vector3(
+            self.x ** value,
+            self.y ** value,
+            self.z ** value
+        )
 
     def get(self) -> tuple[float]:
         return self.x, self.y, self.z
     
     def length(self) -> float:
-        return sqrt(self.x * self.x + self.y * self.y + self.z * self.z)
+        return self._length
 
     def normalize(self) -> Vector3:
         length: float = self.length()
@@ -92,8 +112,8 @@ class Vector3(BaseModel):
             self.z / length
         )
     
-    def to_tensor(self) -> Tensor:
-        return tensor([self.x, self.y, self.z], dtype=float32)
+    def to_tensor(self) -> torch.Tensor:
+        return torch.tensor([self.x, self.y, self.z], dtype=torch.float32)
 
 
 def from_texture(point: Vector3, texture: GodotTexture3DSampler) -> float:
@@ -146,23 +166,35 @@ class FunctionDataset(Dataset):
         self.size = size
         self.params: Data = params
 
+        self.input_data = torch.empty((size, 6), dtype=torch.float32)
+        self.output_data = torch.empty(size, dtype=torch.float32)
+
+        for index in tqdm(range(size), desc="Создание датасета"):
+            input1, input2, value = self.create()
+            self.input_data[index] = torch.cat([input1.to_tensor(), input2.to_tensor()])
+            self.output_data[index] = value
+    
+    @staticmethod
+    def get_sphere_intersection(position: Vector3, direction: Vector3) -> Vector3:
+        dot = Vector3.dot(position, direction)
+
+        _sqrt = sqrt(dot * dot + 1.0 - position.length() * position.length())
+
+        return position + direction * (-dot + _sqrt)
+
     def create(self) -> tuple[Vector3, Vector3, float]:
-        start, end = Vector3.random(), Vector3.random()
+        start = Vector3.random_start() * 0.75
+        end = self.get_sphere_intersection(start, Vector3.random_direction())
         
         value = function(start, end, self.params)
 
-        return start, end, value
+        return start, end, value * 1000
 
     def __len__(self) -> int:
         return self.size
     
-    @lru_cache
-    def __getitem__(self, index: int) -> tuple[Tensor, Tensor]:
-        start, end, value = self.create()
-
-        input = cat([start.to_tensor(), end.to_tensor()], dim=0)
-
-        return input, tensor(value, dtype=float32)
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.input_data[index], self.output_data[index]
 
 
 def dataloader_base(batch_size: int, num_workers: int) -> dict[str, Any]:
@@ -182,7 +214,7 @@ def get_dataset(data: Data, size: int, percent: float = 0.2, batch_size: int = 3
     base_settings: dict[str, Any] = dataloader_base(batch_size, workers)
     
     # Каррирование для создание базового FunctionDataset по размеру
-    base_dataset: Callable[[int], FunctionDataset] = lambda size: FunctionDataset(size, data, threads_count=workers)
+    base_dataset: Callable[[int], FunctionDataset] = lambda size: FunctionDataset(size, data)
 
     # Каррирование для создания DataLoader по размеру
     dataset: Callable[[bool], DataLoader] = lambda is_train: DataLoader(
@@ -197,7 +229,7 @@ def get_dataset(data: Data, size: int, percent: float = 0.2, batch_size: int = 3
 
 
 @lru_cache
-def GET_DATA(steps: int = 64) -> Data:
+def GET_DATA(steps: int = 1024) -> Data:
     # Функция-константа для исходных данных
     # Можете написать свою подобную
 
