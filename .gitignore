@@ -5,5 +5,5 @@ __pycache__
 
 # result data
 
-best_model_data.txt
-model.pth
+best_model_data*.txt
+model*.pth
