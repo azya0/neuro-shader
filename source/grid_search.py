@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Callable
-from dataclasses import dataclass
+from typing import Any, Callable
+from dataclasses import dataclass, field
 
 from torch.nn import Module
 from torch import save
@@ -8,8 +8,11 @@ from torch import save
 
 @dataclass
 class SearchValue:
-    model_struct:   tuple[int]
     learning_rate:  float
+    model_args:     tuple[Any] = field(default_factory=lambda : ())
+    model_kwargs:   dict[str, Any] = field(default_factory=lambda : {})
+    loss_args:     tuple[Any] = field(default_factory=lambda : ())
+    loss_kwargs:   dict[str, Any] = field(default_factory=lambda : {})
 
     def __str__(self) -> str:
         return str(self.__dict__)
@@ -31,6 +34,7 @@ class GridSeatchParams[T: IGotModel]:
     convertor:          Callable[[SearchValue], T]
     train_iteration:    Callable[[T], float]
     valid_iteration:    Callable[[T], float]
+    methric_function:   Callable[[T], float]
     after_iteration:    Callable[[], None] | None = None
 
 
@@ -40,6 +44,12 @@ class SearchResult:
     model:          Module
     train_loss:     float
     valid_loss:     float
+    methric:        float
+
+    def __str__(self) -> str:
+        ban_list: tuple[str] = ("scheme", "model")
+
+        return str({key: value for key, value in self.__dict__.items() if not key in ban_list})
 
 
 class GridSearch[T: IGotModel]:
@@ -49,7 +59,7 @@ class GridSearch[T: IGotModel]:
         self.params = params
     
     def __compare(self, data: SearchResult):
-        if self.best is None or self.best.valid_loss > data.valid_loss:
+        if self.best is None or self.best.methric < data.methric:
             self.best = data
 
     # Механизм автоматической остановки. 
@@ -76,20 +86,25 @@ class GridSearch[T: IGotModel]:
 
         return best_train_score, validation_score
 
-
     def save(self):
+        if self.best is None:
+            print("Ни одна из моделей не доучилась до конца early-stop'а")
+            return
+
         with open(self.params.filepath_data, "w") as file:
-             file.write(f"train: {self.best.train_loss}\nvalid: {self.best.valid_loss}\n{self.best.scheme}")
+             file.write(f"{self.best}\n{self.best.scheme}")
 
         save(self.best.model.state_dict(), self.params.filepath_model)
-
-    def run(self):
+    
+    def __main(self):
         for variant in self.params.variants:
             data = self.params.convertor(variant)
 
             train, valid = self.__auto_epoches(data)
 
-            result = SearchResult(variant, data.get_model(), train, valid)
+            methric: float = self.params.methric_function(data)
+
+            result = SearchResult(variant, data.get_model(), train, valid, methric)
             
             self.__compare(result)
 
@@ -97,5 +112,11 @@ class GridSearch[T: IGotModel]:
                 continue
             
             self.params.after_iteration()
-        
-        self.save()
+
+    def run(self):
+        try:
+            self.__main()
+        except Exception as error:
+            raise error
+        finally:
+            self.save()

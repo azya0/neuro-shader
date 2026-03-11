@@ -60,7 +60,7 @@ class Vector3(BaseModel):
         self._length = sqrt(self.x * self.x + self.y * self.y + self.z * self.z)
     
     def __str__(self) -> str:
-        return f"({self.x}, {self.y}, {self.z})"
+        return f"{self.x} {self.y} {self.z}"
 
     def __sub__(self, other: Vector3) -> Vector3:
         return Vector3(
@@ -162,17 +162,43 @@ def function(start: Vector3, end: Vector3, data: Data):
 
 
 class FunctionDataset(Dataset):
-    def __init__(self, size: int, params: Data):
-        self.size = size
-        self.params: Data = params
+    def __init__(self, size: int, params: Data, load_from: str | None = None, scale: int = 1):
+        """
+        scale нужен для увеличения значений случайной величины
+        таким образом значения уйдут от нуля
+        """
+
+        self.size:      int = size
+        self.params:    Data = params
+        self.scale:     int = scale
 
         self.input_data = torch.empty((size, 6), dtype=torch.float32)
         self.output_data = torch.empty(size, dtype=torch.float32)
 
-        for index in tqdm(range(size), desc="Создание датасета"):
-            input1, input2, value = self.create()
-            self.input_data[index] = torch.cat([input1.to_tensor(), input2.to_tensor()])
-            self.output_data[index] = value
+        if load_from is None:
+            self.create_dataset()
+            return
+
+        self.load_dataset(load_from)
+
+    def load_dataset(self, filepath: str):
+        with open(filepath, "r") as file:
+            data = file.readlines()[:self.size]
+        
+        assert len(data) == self.size, f"Число строк в файле меньше, чем ожидается датасетом ({len(data)} / {self.size})"
+
+        for index in tqdm(range(self.size), desc=f"Загрузка датасета из {filepath}"):
+            line = data[index].strip()
+
+            float_data = tuple(map(float, line.split()))
+            self.input_data[index] = torch.tensor(float_data[:-1], dtype=torch.float32)
+            self.output_data[index] = float_data[-1] * self.scale
+
+    def create_dataset(self):
+        for index in tqdm(range(self.size), desc="Создание датасета"):
+            input_1, input_2, value = self.create()
+            self.input_data[index] = torch.cat([input_1.to_tensor(), input_2.to_tensor()])
+            self.output_data[index] = value * self.scale
     
     @staticmethod
     def get_sphere_intersection(position: Vector3, direction: Vector3) -> Vector3:
@@ -188,7 +214,7 @@ class FunctionDataset(Dataset):
         
         value = function(start, end, self.params)
 
-        return start, end, value * 1000
+        return start, end, value
 
     def __len__(self) -> int:
         return self.size
@@ -206,7 +232,7 @@ def dataloader_base(batch_size: int, num_workers: int) -> dict[str, Any]:
     }
 
 
-def get_dataset(data: Data, size: int, percent: float = 0.2, batch_size: int = 32, workers: int = 8) -> tuple[DataLoader, DataLoader]:
+def get_dataset(data: Data, size: int, filepath: str | None = None, percent: float = 0.2, batch_size: int = 32, workers: int = 8) -> tuple[DataLoader, DataLoader]:
     valid_size: int = ceil(float(size) * percent)
     train_size: int = size - valid_size
 
@@ -214,7 +240,7 @@ def get_dataset(data: Data, size: int, percent: float = 0.2, batch_size: int = 3
     base_settings: dict[str, Any] = dataloader_base(batch_size, workers)
     
     # Каррирование для создание базового FunctionDataset по размеру
-    base_dataset: Callable[[int], FunctionDataset] = lambda size: FunctionDataset(size, data)
+    base_dataset: Callable[[int], FunctionDataset] = lambda size: FunctionDataset(size, data, filepath)
 
     # Каррирование для создания DataLoader по размеру
     dataset: Callable[[bool], DataLoader] = lambda is_train: DataLoader(

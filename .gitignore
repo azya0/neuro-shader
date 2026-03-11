@@ -3,6 +3,10 @@
 .venv
 __pycache__
 
+# saved dataset
+
+source/dataset
+
 # result data
 
 best_model_data*.txt

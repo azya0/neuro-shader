@@ -2,14 +2,11 @@ from dataclasses import dataclass
 
 from PIL import Image
 from torchinfo import summary
-import torch
 import typing
 import threading
 from queue import Queue
-from functools import reduce
-import subprocess
 
-from model import MLP
+from model import MLP, ZmeyGorinich1
 from noise_dataset import get_dataset, Constants, Noises, Data
 from godot.ImageTextureParser import parse
 from godot.ImageTexture3D import GodotTexture3DSampler
@@ -48,6 +45,8 @@ def dataset_test() -> float:
 
 
 def model_check(filepath: str):
+    import torch
+
     model = MLP(sizes=(16, 16, 1), use_dropout=True)
 
     model.load_state_dict(torch.load(filepath))
@@ -104,7 +103,24 @@ def value_collector(size: int = 10000) -> DataDistribution:
     return result
 
 
-def by_threads[T](function: typing.Callable[[int], T], full_size: int, threads_number: int = 12) -> tuple[T]:
+@dataclass
+class SaveParams:
+    filepath:   str
+    file_lock:  threading.Lock
+
+
+def save_dataset(size: int, params: SaveParams):
+    dataset = FunctionDataset(size, params=GET_DATA())
+
+    for _ in tqdm(range(len(dataset))):
+        data = dataset.create()
+        
+        with params.file_lock:
+            with open(params.filepath, "a") as file:
+                file.write(f"{str(data[0])} {str(data[1])} {data[2]}\n")
+
+
+def by_threads[T, K](function: typing.Callable[[int, K], T], params: K, full_size: int, threads_number: int = 12) -> tuple[T]:
     result: Queue[T] = Queue(maxsize=threads_number)
 
     threads: list[threading.Thread] = []
@@ -113,7 +129,7 @@ def by_threads[T](function: typing.Callable[[int], T], full_size: int, threads_n
     for index in range(threads_number):
         size: int = part + (0 if index else (full_size - part * threads_number))
 
-        thread = threading.Thread(target=lambda size: result.put(function(size)), args=(size, ))
+        thread = threading.Thread(target=lambda : result.put(function(size, params)))
         thread.start()
         threads.append(thread)
     
@@ -122,18 +138,59 @@ def by_threads[T](function: typing.Callable[[int], T], full_size: int, threads_n
 
     return tuple([result.get() for _ in range(threads_number)])
 
-if __name__ == "__main__":
-    # image_test("../dataset/LargeImage.tres")
-    # model_check("../model.pth")
-    data: DataDistribution = reduce(lambda first, second : first.merge(second), by_threads(value_collector, 50000, 8))
-    subprocess.run("clear")
-    
-    for field, value in data.__dict__.items():
-        print(f"Данные для поля {field}")
 
-        mean = reduce(lambda first, second: first + second, value) / float(len(value))
-        print(f"MEAN: {mean}")
-        variance = reduce(lambda first, second: first + second, [(x - mean) ** 2.0 for x in value]) / float(len(value))
-        print(f"VARIANCE: {variance}")
-        sigma = variance ** 0.5
-        print(f"SIGMA: {sigma}")
+def visualise_value(parts_number: int = 32):
+    dataset = FunctionDataset(16_000, params=GET_DATA(), load_from="./dataset/data.txt")
+
+    from matplotlib import pyplot as plt
+    from torch import log1p
+
+    data = dataset.output_data
+    
+    plt.hist(data.tolist(), bins=parts_number, color="blue")
+    plt.hist(log1p(data).tolist(), bins=parts_number, color="red")
+
+    plt.show()
+
+
+def r2_metric(filepath: str):
+    import torch
+    
+    model = ZmeyGorinich1()
+
+    model.load_state_dict(torch.load(filepath))
+    model.eval()
+
+    dataset = FunctionDataset(16_000, params=GET_DATA(), load_from="./dataset/data.txt")
+
+    mean: float = dataset.output_data.mean().item()
+    variance: float = 0.0
+    mse: float = 0.0
+
+    input_data: torch.Tensor
+    output_data: torch.Tensor
+    index: int = 0
+    for input_data, output_data in (bar := tqdm(dataset, desc="Сравнение данных")):
+        if (true_value := output_data.item()) == 0.0:
+            continue
+        
+        index += 1
+        with torch.no_grad():
+            result: torch.Tensor = model(input_data.reshape(shape=(1, 6)))[2]
+        
+        result: float = result.item()
+
+        mse += (true_value - result) ** 2
+        variance += (mean - result) ** 2
+
+        bar.set_description(f"{result}")
+
+    return 1 - mse / variance
+
+
+
+if __name__ == "__main__":
+    # lock = threading.Lock()
+    # by_threads(save_dataset, SaveParams("./dataset/data.txt", lock), 50_000, threads_number=8)
+    # visualise_value()
+    print(r2_metric("../model.pth"))
