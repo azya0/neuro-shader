@@ -145,7 +145,7 @@ def get_density(point: Vector3, data: Data) -> float:
     return value
 
 
-def function(start: Vector3, end: Vector3, data: Data):
+def function(start: Vector3, end: Vector3, data: Data) -> float:
     addition: Vector3 = (end - start) / float(data.steps)
     
     position: Vector3 = start.model_copy()

@@ -1,5 +1,7 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
+import matplotlib.pyplot as plt
 from PIL import Image
 from torchinfo import summary
 import typing
@@ -7,6 +9,7 @@ import threading
 from queue import Queue
 
 from model import MLP, ZmeyGorinich1
+from loss_function import GorinichLoss
 from noise_dataset import get_dataset, Constants, Noises, Data
 from godot.ImageTextureParser import parse
 from godot.ImageTexture3D import GodotTexture3DSampler
@@ -153,44 +156,16 @@ def visualise_value(parts_number: int = 32):
     plt.show()
 
 
-def r2_metric(filepath: str):
+def test_loss():
     import torch
+
+    loss = GorinichLoss()
     
-    model = ZmeyGorinich1()
+    test_input = (0, torch.tensor([[0.0], [0.0], [0.0]]), torch.tensor([[0.0], [0.0], [0.0]]))
+    test_true = torch.tensor([[1.0], [0.0035], [0.0005]])
 
-    model.load_state_dict(torch.load(filepath))
-    model.eval()
-
-    dataset = FunctionDataset(16_000, params=GET_DATA(), load_from="./dataset/data.txt")
-
-    mean: float = dataset.output_data.mean().item()
-    variance: float = 0.0
-    mse: float = 0.0
-
-    input_data: torch.Tensor
-    output_data: torch.Tensor
-    index: int = 0
-    for input_data, output_data in (bar := tqdm(dataset, desc="Сравнение данных")):
-        if (true_value := output_data.item()) == 0.0:
-            continue
-        
-        index += 1
-        with torch.no_grad():
-            result: torch.Tensor = model(input_data.reshape(shape=(1, 6)))[2]
-        
-        result: float = result.item()
-
-        mse += (true_value - result) ** 2
-        variance += (mean - result) ** 2
-
-        bar.set_description(f"{result}")
-
-    return 1 - mse / variance
-
+    print(loss(test_input, test_true))
 
 
 if __name__ == "__main__":
-    # lock = threading.Lock()
-    # by_threads(save_dataset, SaveParams("./dataset/data.txt", lock), 50_000, threads_number=8)
-    # visualise_value()
-    print(r2_metric("../model.pth"))
+    test_loss()

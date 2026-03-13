@@ -11,3 +11,4 @@ source/dataset
 
 best_model_data*.txt
 model*.pth
+extra_test.txt

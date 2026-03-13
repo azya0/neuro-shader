@@ -6,7 +6,7 @@ from torch import nn, optim, Tensor, device, cuda, no_grad
 from tqdm import tqdm
 
 from model import MLP, ZmeyGorinich1
-from loss_function import GorinichLoss
+from loss_function import GorinichLoss1
 from noise_dataset import FunctionDataset, get_dataset, DataLoader, GET_DATA, Data
 from grid_search import GridSeatchParams, SearchValue, GridSearch, IGotModel
 
@@ -26,9 +26,9 @@ def get_device(use_cuda: bool = True) -> device:
 class TrainData(IGotModel):
     optimizer:  optim.AdamW
     dataset:    tuple[DataLoader, DataLoader]
+    loss:       nn.Module
     model:      nn.Module = field(default_factory=ZmeyGorinich1)
     device:     device = field(default_factory=get_device)
-    loss:       nn.Module = field(default_factory= lambda x: GorinichLoss(x))
 
     def get_model(self) -> nn.Module:
         return self.model
@@ -120,7 +120,7 @@ def load_dataset(size: int, filepath: str | None = None) -> tuple[DataLoader, Da
     params = TrainDataParams(
         size=size,
         percent=0.2,
-        batch_size=32,
+        batch_size=64,
         workers=8
     )
 
@@ -146,24 +146,38 @@ def main():
     after_iteration()
 
     LOSS_KWARGS: tuple[tuple[int]] = (
-        {"alpha": 0.3}, {"alpha": 0.5}, {"alpha": 0.7}
+        {"alpha": 0.3, "boost": 1.0},
+        {"alpha": 0.5, "boost": 1.0},
+        {"alpha": 0.7, "boost": 1.0},
+        
+        {"alpha": 0.3, "boost": 10.0},
+        {"alpha": 0.5, "boost": 10.0},
+        {"alpha": 0.7, "boost": 10.0},
+
+        {"alpha": 0.3, "boost": 100.0},
+        {"alpha": 0.5, "boost": 100.0},
+        {"alpha": 0.7, "boost": 100.0},
+
+        {"alpha": 0.3, "boost": 1000.0},
+        {"alpha": 0.5, "boost": 1000.0},
+        {"alpha": 0.7, "boost": 1000.0},
     )
 
     LEARNING_RATES: tuple[float] = (
-        0.01, 0.001, 0.0001,
+        0.001, 0.0001,
     )
 
     variants: list[SearchValue] = []
 
-    for loss_kwarg in LOSS_KWARGS:
-        for lr in LEARNING_RATES:
+    for lr in LEARNING_RATES:
+        for loss_kwarg in LOSS_KWARGS:
             variants.append(
                 SearchValue(lr, loss_kwargs=loss_kwarg)
             )
 
     def convertor(data: SearchValue) -> TrainData:
         model = ZmeyGorinich1(*data.model_args, **data.model_kwargs).to(get_device())
-        loss = GorinichLoss(*data.loss_args, **data.loss_kwargs)
+        loss = GorinichLoss1(*data.loss_args, **data.loss_kwargs)
 
         return TrainData(
             model=model,
@@ -173,7 +187,7 @@ def main():
         )
     
     params = GridSeatchParams(
-        epochs=50,
+        epochs=67,
         filepath_data="../best_model_data.txt",
         filepath_model="../model.pth",
         variants=variants,
