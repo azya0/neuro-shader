@@ -34,7 +34,7 @@ class GridSeatchParams[T: IGotModel]:
     convertor:          Callable[[SearchValue], T]
     train_iteration:    Callable[[T], float]
     valid_iteration:    Callable[[T], float]
-    methric_function:   Callable[[T], float]
+    metric_function:   Callable[[T], float]
     after_iteration:    Callable[[], None] | None = None
 
 
@@ -44,7 +44,7 @@ class SearchResult:
     model:          Module
     train_loss:     float
     valid_loss:     float
-    methric:        float
+    metric:        float
 
     def __str__(self) -> str:
         ban_list: tuple[str] = ("scheme", "model")
@@ -59,7 +59,7 @@ class GridSearch[T: IGotModel]:
         self.params = params
     
     def __compare(self, data: SearchResult):
-        if self.best is None or self.best.methric < data.methric:
+        if self.best is None or self.best.metric < data.metric:
             self.best = data
 
     # Механизм автоматической остановки. 
@@ -102,9 +102,9 @@ class GridSearch[T: IGotModel]:
 
             train, valid = self.__auto_epoches(data)
 
-            methric: float = self.params.methric_function(data)
+            metric: float = self.params.metric_function(data)
 
-            result = SearchResult(variant, data.get_model(), train, valid, methric)
+            result = SearchResult(variant, data.get_model(), train, valid, metric)
             
             self.__compare(result)
 

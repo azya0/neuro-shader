@@ -5,7 +5,7 @@ import subprocess
 from torch import nn, optim, Tensor, device, cuda, no_grad
 from tqdm import tqdm
 
-from model import MLP, ZmeyGorinich1
+from model import MLP, ZmeyGorinich1, ZmeyGorinich2
 from loss_function import GorinichLoss1
 from noise_dataset import FunctionDataset, get_dataset, DataLoader, GET_DATA, Data
 from grid_search import GridSeatchParams, SearchValue, GridSearch, IGotModel
@@ -27,7 +27,7 @@ class TrainData(IGotModel):
     optimizer:  optim.AdamW
     dataset:    tuple[DataLoader, DataLoader]
     loss:       nn.Module
-    model:      nn.Module = field(default_factory=ZmeyGorinich1)
+    model:      nn.Module = field(default_factory=ZmeyGorinich2)
     device:     device = field(default_factory=get_device)
 
     def get_model(self) -> nn.Module:
@@ -87,7 +87,7 @@ def iteration(data: TrainData, is_train: bool) -> float:
     return running_loss
 
 
-def r2_methric(data: TrainData) -> float:
+def r2_metric(data: TrainData) -> float:
     data.model.eval()
     dataset: FunctionDataset = data.dataset[1].dataset
 
@@ -146,21 +146,12 @@ def main():
     after_iteration()
 
     LOSS_KWARGS: tuple[tuple[int]] = (
-        {"alpha": 0.3, "boost": 1.0},
-        {"alpha": 0.5, "boost": 1.0},
-        {"alpha": 0.7, "boost": 1.0},
-        
-        {"alpha": 0.3, "boost": 10.0},
         {"alpha": 0.5, "boost": 10.0},
-        {"alpha": 0.7, "boost": 10.0},
-
-        {"alpha": 0.3, "boost": 100.0},
         {"alpha": 0.5, "boost": 100.0},
-        {"alpha": 0.7, "boost": 100.0},
-
-        {"alpha": 0.3, "boost": 1000.0},
-        {"alpha": 0.5, "boost": 1000.0},
-        {"alpha": 0.7, "boost": 1000.0},
+        {"alpha": 0.5, "boost": 500.0},
+        {"alpha": 0.5, "boost": 1_000.0},
+        {"alpha": 0.5, "boost": 5_000.0},
+        {"alpha": 0.5, "boost": 10_000.0},
     )
 
     LEARNING_RATES: tuple[float] = (
@@ -176,7 +167,8 @@ def main():
             )
 
     def convertor(data: SearchValue) -> TrainData:
-        model = ZmeyGorinich1(*data.model_args, **data.model_kwargs).to(get_device())
+        model = ZmeyGorinich2(*data.model_args, **data.model_kwargs).to(get_device())
+        
         loss = GorinichLoss1(*data.loss_args, **data.loss_kwargs)
 
         return TrainData(
@@ -187,14 +179,14 @@ def main():
         )
     
     params = GridSeatchParams(
-        epochs=67,
+        epochs=15,
         filepath_data="../best_model_data.txt",
         filepath_model="../model.pth",
         variants=variants,
         convertor=convertor,
         train_iteration=lambda data: iteration(data, is_train=True),
         valid_iteration=lambda data: iteration(data, is_train=False),
-        methric_function=r2_methric,
+        metric_function=r2_metric,
         after_iteration=after_iteration,
     )
 

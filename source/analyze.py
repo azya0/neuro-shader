@@ -5,7 +5,7 @@ from typing import Callable
 import torch
 from tqdm import tqdm
 
-from model import ZmeyGorinich1
+from model import ZmeyGorinich2
 from noise_dataset import FunctionDataset, GET_DATA
 
 
@@ -19,7 +19,7 @@ class ProcessParams[T]:
 
 
 def process_model[T](params: ProcessParams):
-    model = ZmeyGorinich1()
+    model = ZmeyGorinich2()
 
     model.load_state_dict(torch.load(params.filepath))
     model.eval()
@@ -174,7 +174,7 @@ class GraphCollector:
 
 
 if __name__ == "__main__":
-    model_path: str = "../good/second/model.pth"
+    model_path: str = "../model.pth"
 
     dataset = FunctionDataset(16_000, params=GET_DATA(), load_from="./dataset/data.txt")
     output_value = dataset.output_data
