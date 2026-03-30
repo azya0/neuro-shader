@@ -1,6 +1,6 @@
 # dev
 
-.venv
+.venv*
 __pycache__
 
 # saved dataset
@@ -12,3 +12,6 @@ source/dataset
 best_model_data*.txt
 model*.pth
 extra_test.txt
+onnx
+export/*
+!.gitinclude
